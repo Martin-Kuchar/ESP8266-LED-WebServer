@@ -1,4 +1,5 @@
 #include "FastLED.h"
+#include <ArduinoJson.h>
 #include <ESP8266WiFi.h>
 #include <WiFiClient.h>
 #include <ESP8266WebServer.h>
@@ -51,6 +52,26 @@ void handleRoot() {
 
 }
 
+void showFrame(){
+
+  StaticJsonDocument<300> JSONData;
+  String jsonString = server.arg("plain");
+  DeserializationError error = deserializeJson(JSONData, jsonString);
+
+  JsonArray arr = JSONData["params"].as<JsonArray>();
+
+  int a = arr.size();
+
+  for (size_t i = 0; i < LED_COUNT; i++)
+  {
+    leds[i] = CRGB(arr[i][0].as<uint8_t>(), arr[i][1].as<uint8_t>(), arr[i][2].as<uint8_t>());
+    FastLED.show();
+  }
+  
+  server.send(200, "application/json", "OK");
+
+}
+
 void handleNotFound() {
 
   String message = "File Not Found\n\n";
@@ -94,10 +115,10 @@ void setup(void) {
   Serial.begin(115200);
 
   FastLED.addLeds<WS2812, LED_PIN, COLOR_ORDER>(leds, LED_COUNT);
-
+  FastLED.setBrightness(127);
   for (size_t i = 0; i < LED_COUNT; i++)
   {
-    leds[i] = CRGB::Green;
+    leds[i] = CRGB::Blue;
     FastLED.show();
     delay(100);
   }
@@ -127,6 +148,7 @@ void setup(void) {
   }
 
   server.on("/", handleRoot);
+  server.on("/frame", showFrame);
   server.on("/test.svg", drawGraph);
   server.on("/inline", []() {
     server.send(200, "text/plain", "this works as well");
