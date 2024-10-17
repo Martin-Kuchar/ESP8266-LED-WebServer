@@ -1,4 +1,4 @@
-
+#include "FastLED.h"
 #include <ESP8266WiFi.h>
 #include <WiFiClient.h>
 #include <ESP8266WebServer.h>
@@ -9,15 +9,20 @@
 #define STAPSK  "timeckuchar1973"
 #endif
 
+#define LED_COUNT 9
+#define LED_PIN 2
+#define COLOR_ORDER GRB 
+
 const char *ssid = STASSID;
 const char *password = STAPSK;
 
 ESP8266WebServer server(80);
 
-const int led = 13;
+CRGBArray<LED_COUNT> leds;
+
 
 void handleRoot() {
-  digitalWrite(led, 1);
+
   char temp[400];
   int sec = millis() / 1000;
   int min = sec / 60;
@@ -43,11 +48,11 @@ void handleRoot() {
            hr, min % 60, sec % 60
           );
   server.send(200, "text/html", temp);
-  digitalWrite(led, 0);
+
 }
 
 void handleNotFound() {
-  digitalWrite(led, 1);
+
   String message = "File Not Found\n\n";
   message += "URI: ";
   message += server.uri();
@@ -62,7 +67,7 @@ void handleNotFound() {
   }
 
   server.send(404, "text/plain", message);
-  digitalWrite(led, 0);
+
 }
 
 void drawGraph() {
@@ -87,6 +92,20 @@ void drawGraph() {
 void setup(void) {
 
   Serial.begin(115200);
+
+  FastLED.addLeds<WS2812, LED_PIN, COLOR_ORDER>(leds, LED_COUNT);
+
+  for (size_t i = 0; i < LED_COUNT; i++)
+  {
+    leds[i] = CRGB::Green;
+    FastLED.show();
+    delay(100);
+  }
+
+  FastLED.clear();
+  FastLED.show();
+
+
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
   Serial.println("");
