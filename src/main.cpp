@@ -4,6 +4,7 @@
 #include <WiFiClient.h>
 #include <ESP8266WebServer.h>
 #include <ESP8266mDNS.h>
+#include <EEPROM.h>
 
 #ifndef STASSID
 #define STASSID "Home_Net1"
@@ -58,9 +59,17 @@ void showFrame(){
   String jsonString = server.arg("plain");
   DeserializationError error = deserializeJson(JSONData, jsonString);
 
+  if (error) {
+    server.send(500, "text/plain", "Internal Server Error");
+    return;
+  }
+
   JsonArray arr = JSONData["params"].as<JsonArray>();
 
-  int a = arr.size();
+  if(arr.size() != LED_COUNT){
+    server.send(400, "application/json", "Bad Request");
+    return;
+  }
 
   for (size_t i = 0; i < LED_COUNT; i++)
   {
@@ -70,6 +79,74 @@ void showFrame(){
   
   server.send(200, "application/json", "OK");
 
+}
+
+void clearFrame(){
+  FastLED.clear(1);
+
+  server.send(200, "application/json", "OK");
+  FastLED.show();
+}
+
+void storeFrame(){
+  StaticJsonDocument<300> JSONData;
+  String jsonString = server.arg("plain");
+  DeserializationError error = deserializeJson(JSONData, jsonString);
+
+  if (error) {
+    server.send(500, "text/plain", "Internal Server Error");
+    return;
+  }
+
+  JsonArray arr = JSONData["params"].as<JsonArray>();
+  int pos = JSONData["position"].as<int>();
+
+  if(arr.size() != LED_COUNT){
+    server.send(400, "text/plain", "Bad Request");
+    return;
+  }
+
+  if(pos < 0 || pos > 5){
+    server.send(400, "text/plain", "Bad Request");
+    return;
+  }
+
+  
+  for (size_t i = 0; i < LED_COUNT; i++)
+  {
+    int address = i*sizeof(CRGB)+pos*sizeof(leds);
+    EEPROM.put(address, CRGB(arr[i][0].as<uint8_t>(), arr[i][1].as<uint8_t>(), arr[i][2].as<uint8_t>()));
+  }
+
+  EEPROM.commit();
+
+  server.send(200, "text/plain", "OK");
+}
+
+void showStored(){
+  StaticJsonDocument<300> JSONData;
+  String jsonString = server.arg("plain");
+  DeserializationError error = deserializeJson(JSONData, jsonString);
+
+  if (error) {
+    server.send(500, "text/plain", "Internal Server Error");
+    return;
+  }
+
+  int pos = JSONData["position"].as<int>();
+
+  if(pos < 0 || pos > 5){
+    server.send(400, "text/plain", "Bad Request");
+    return;
+  }
+  
+  for (size_t i = 0; i < LED_COUNT; i++)
+  {
+    int address = i*sizeof(CRGB)+pos*sizeof(leds);
+    EEPROM.get(address, leds[i]);
+    FastLED.show();
+  }
+  server.send(200, "text/plain", "OK");
 }
 
 void handleNotFound() {
@@ -91,28 +168,11 @@ void handleNotFound() {
 
 }
 
-void drawGraph() {
-  String out;
-  out.reserve(2600);
-  char temp[70];
-  out += "<svg xmlns=\"http://www.w3.org/2000/svg\" version=\"1.1\" width=\"400\" height=\"150\">\n";
-  out += "<rect width=\"400\" height=\"150\" fill=\"rgb(250, 230, 210)\" stroke-width=\"1\" stroke=\"rgb(0, 0, 0)\" />\n";
-  out += "<g stroke=\"black\">\n";
-  int y = rand() % 130;
-  for (int x = 10; x < 390; x += 10) {
-    int y2 = rand() % 130;
-    sprintf(temp, "<line x1=\"%d\" y1=\"%d\" x2=\"%d\" y2=\"%d\" stroke-width=\"1\" />\n", x, 140 - y, x + 10, 140 - y2);
-    out += temp;
-    y = y2;
-  }
-  out += "</g>\n</svg>\n";
-
-  server.send(200, "image/svg+xml", out);
-}
 
 void setup(void) {
 
   Serial.begin(115200);
+  EEPROM.begin(512);
 
   FastLED.addLeds<WS2812, LED_PIN, COLOR_ORDER>(leds, LED_COUNT);
   FastLED.setBrightness(127);
@@ -148,11 +208,11 @@ void setup(void) {
   }
 
   server.on("/", handleRoot);
-  server.on("/frame", showFrame);
-  server.on("/test.svg", drawGraph);
-  server.on("/inline", []() {
-    server.send(200, "text/plain", "this works as well");
-  });
+  server.on("/frame/show", HTTP_POST, showFrame);
+  server.on("/frame/clear", HTTP_POST, clearFrame);
+  server.on("/frame/store", HTTP_POST, storeFrame);
+  server.on("/frame/show/stored", HTTP_POST, showStored);
+
   server.onNotFound(handleNotFound);
   server.begin();
   Serial.println("HTTP server started");
