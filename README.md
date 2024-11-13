@@ -1,6 +1,6 @@
 # ESP8266 LED WebServer 
 
-Simple ESP8266 WebServer to controll addresable leds with REST api.
+Simple ESP8266 WebServer to control addresable leds with REST api.
 
 ## Features
 
